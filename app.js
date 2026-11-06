@@ -22,8 +22,14 @@ function aviso(t) {
   aviso.t = setTimeout(() => { a.hidden = true; }, 3000);
 }
 
+const TITULOS = { feed: 'Plant+ | Início', detalhe: 'Plant+ | Foto', postar: 'Plant+ | Postar foto', plantas: 'Plant+ | Cultivos', guia: 'Plant+ | Guia da horta' };
+
 function ir(nome) {
   document.querySelectorAll('.tela').forEach(t => t.classList.toggle('ativa', t.id === nome));
+  document.querySelectorAll('#menu [data-ir]').forEach(b => b.classList.toggle('ativo', b.dataset.ir === (nome === 'detalhe' ? 'feed' : nome)));
+  $('#titulo-tela').textContent = TITULOS[nome] || '';
+  $('#topo-app').hidden = nome === 'login';
+  $('#gaveta').hidden = true;
   window.scrollTo(0, 0);
 }
 
@@ -74,6 +80,7 @@ function iniciar() {
   const conta = ler('contas', {})[chave];
   if (!conta) return;
   usuario = conta.nome;
+  $('#gaveta-nome').textContent = usuario;
   posts = ler('posts', null) || POSTS_INICIAIS;
   minhas = ler('minhas:' + chave, []);
   minhas.chave = chave;
@@ -255,6 +262,7 @@ $('#form-post').onsubmit = async e => {
   }
 };
 
+const ESTAGIOS = { semente: '🌱 Semente', muda: '🌿 Muda', adulta: '🪴 Adulta', frutificando: '🍅 Frutificando' };
 const restam = m => planta(m.id).rega - dias(hoje(), m.ultima);
 
 function salvarMinhas() {
@@ -271,24 +279,42 @@ function renderPlantas() {
   if (!minhas.length) l.append(el('li', 'sub', 'Adicione as plantas que você cultiva para receber avisos de rega.'));
   minhas.forEach((m, i) => {
     const pl = planta(m.id), r = restam(m);
-    const li = el('li', 'item');
-    const t = el('div');
-    t.append(el('strong', null, `${pl.emoji} ${pl.nome}`), el('small', null, r <= 0 ? 'Regar hoje' : `Próxima rega em ${r} dia(s)`));
+    const li = el('li', 'cultivo');
+    const t = el('div', 'dados');
+    t.append(el('strong', 'nome', `${pl.emoji} ${pl.nome}`));
+    if (m.data) {
+      const n = dias(hoje(), m.data);
+      t.append(el('span', null, 'Data de plantio:'), el('b', null, m.data.split('-').reverse().join('/')), el('small', null, n <= 0 ? 'Plantado hoje' : `Plantado há ${n} dia${n > 1 ? 's' : ''}`));
+    }
+    t.append(el('small', r <= 0 ? 'regar' : null, r <= 0 ? 'Regar hoje' : `Próxima rega em ${r} dia(s)`));
+    if (m.estagio in ESTAGIOS) t.append(el('span', 'tag ' + m.estagio, ESTAGIOS[m.estagio]));
+    const lado = el('div', 'lado');
     const ok = el('button', 'btn pequeno', 'Reguei');
     ok.onclick = () => { m.ultima = hoje(); salvarMinhas(); renderPlantas(); };
-    const rm = el('button', 'btn claro pequeno', 'Remover');
+    const rm = el('button', 'lixo', '🗑️');
+    rm.setAttribute('aria-label', 'Remover ' + pl.nome);
     rm.onclick = () => { minhas.splice(i, 1); salvarMinhas(); renderPlantas(); };
-    li.append(t, ok, rm);
+    lado.append(ok, rm);
+    li.append(t, lado);
     l.append(li);
   });
 }
 
-$('#add-btn').onclick = () => {
+const modal = $('#modal');
+const fecharModal = () => { modal.hidden = true; };
+$('#fab').onclick = () => { $('#add-data').value = hoje(); modal.hidden = false; };
+$('#cancelar').onclick = fecharModal;
+modal.onclick = e => { if (e.target === modal) fecharModal(); };
+$('#hamb').onclick = () => { $('#gaveta').hidden = !$('#gaveta').hidden; };
+
+$('#form-add').onsubmit = e => {
+  e.preventDefault();
   const id = $('#add-planta').value;
   if (minhas.some(m => m.id === id)) return aviso('Você já adicionou essa planta.');
-  minhas.push({ id, ultima: '1970-01-01' });
+  minhas.push({ id, ultima: '1970-01-01', data: $('#add-data').value || hoje(), estagio: document.querySelector('[name=estagio]:checked').value });
   salvarMinhas();
   renderPlantas();
+  fecharModal();
 };
 
 $('#notif').onclick = async () => {

@@ -23,10 +23,10 @@ const DICAS = [
 ];
 
 const POSTS_INICIAIS = [
-  { id: 1, autor: 'Lucas G.', plantaId: 'alface', texto: 'Primeira colheita na varanda do apartamento!', cor: '#dcedc8', alt: 220, emoji: '🥬' },
-  { id: 2, autor: 'Ana B.', plantaId: 'tomate', texto: 'Tomates-cereja no vaso de 30 L, já com tutor.', cor: '#ffd9cc', alt: 280, emoji: '🍅' },
-  { id: 3, autor: 'Clara S.', plantaId: 'hortela', texto: 'Hortelã sozinha no vaso, como recomendado.', cor: '#c8e6c9', alt: 180, emoji: '🍃' },
-  { id: 4, autor: 'Marcos P.', plantaId: 'morango', texto: 'Jardineira de morangos no quintal pequeno.', cor: '#f8d7e0', alt: 250, emoji: '🍓' },
-  { id: 5, autor: 'Júlia R.', plantaId: 'manjericao', texto: 'Manjericão pinçado toda semana.', cor: '#e6ee9c', alt: 200, emoji: '🌱' },
-  { id: 6, autor: 'Davi M.', plantaId: 'pimenta', texto: 'Pimenteira dando fruto na laje.', cor: '#ffe0b2', alt: 240, emoji: '🌶️' }
+  { id: 1, autor: 'Dev.', plantaId: 'alface', texto: 'Primeira colheita na varanda do apartamento!', cor: '#dcedc8', alt: 220, emoji: '🥬' },
+  { id: 2, autor: 'Dev.', plantaId: 'tomate', texto: 'Tomates-cereja no vaso de 30 L, já com tutor.', cor: '#ffd9cc', alt: 280, emoji: '🍅' },
+  { id: 3, autor: 'Dev.', plantaId: 'hortela', texto: 'Hortelã sozinha no vaso, como recomendado.', cor: '#c8e6c9', alt: 180, emoji: '🍃' },
+  { id: 4, autor: 'Dev.', plantaId: 'morango', texto: 'Jardineira de morangos no quintal pequeno.', cor: '#f8d7e0', alt: 250, emoji: '🍓' },
+  { id: 5, autor: 'Dev.', plantaId: 'manjericao', texto: 'Manjericão pinçado toda semana.', cor: '#e6ee9c', alt: 200, emoji: '🌱' },
+  { id: 6, autor: 'Dev.', plantaId: 'pimenta', texto: 'Pimenteira dando fruto na laje.', cor: '#ffe0b2', alt: 240, emoji: '🌶️' }
 ].map(p => ({ ...p, planta: PLANTAS.find(x => x.id === p.plantaId).nome, curtidas: 0, curtiu: false, comentarios: [] }));
