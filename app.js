@@ -1,6 +1,6 @@
 const SUPABASE_URL = 'https://gmgcscfnfnqylccsjkrz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_utS1fkmWSipevwSpQX_uEA_m3Bvy88_';
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const db = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 const $ = s => document.querySelector(s);
 const hoje = () => new Date().toLocaleDateString('sv');
@@ -47,7 +47,7 @@ function modo(c) {
 }
 $('#alternar').onclick = () => modo(!cadastro);
 
-// Autenticação com Supabase
+// Autenticação com Supabase usando 'db'
 $('#form-login').onsubmit = async e => {
   e.preventDefault();
   const erro = $('#erro-login');
@@ -57,7 +57,7 @@ $('#form-login').onsubmit = async e => {
 
   if (cadastro) {
     const nome = $('#nome').value.trim();
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await db.auth.signUp({
       email,
       password: senha,
       options: { data: { nome } }
@@ -66,7 +66,7 @@ $('#form-login').onsubmit = async e => {
     aviso('Conta criada! Faça login.');
     modo(false);
   } else {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+    const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
     if (error) return (erro.textContent = 'E-mail ou senha incorretos.');
     iniciarSessao(data.session);
   }
@@ -92,7 +92,7 @@ async function iniciarSessao(session) {
 }
 
 $('#sair').onclick = async () => {
-  await supabase.auth.signOut();
+  await db.auth.signOut();
   usuario = null;
   usuarioId = null;
   $('#form-login').reset();
@@ -132,7 +132,7 @@ function renderFiltros() {
 }
 
 async function carregarPosts() {
-  const { data, error } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
+  const { data, error } = await db.from('posts').select('*').order('created_at', { ascending: false });
   if (error || !data || data.length === 0) {
     posts = POSTS_INICIAIS.map((p, index) => ({ ...p, id: index + 1, curtidas: 0, curtiu: false, comentarios: [] }));
   } else {
@@ -143,7 +143,7 @@ async function carregarPosts() {
 async function curtir(p) {
   p.curtiu = !p.curtiu;
   p.curtidas += p.curtiu ? 1 : -1;
-  await supabase.from('posts').upsert({ id: p.id, autor: p.autor, planta_id: p.plantaId, planta: p.planta, texto: p.texto, img: p.img, cor: p.cor, curtidas: p.curtidas, comentarios: p.comentarios });
+  await db.from('posts').upsert({ id: p.id, autor: p.autor, planta_id: p.plantaId, planta: p.planta, texto: p.texto, img: p.img, cor: p.cor, curtidas: p.curtidas, comentarios: p.comentarios });
 }
 
 function renderFeed() {
@@ -210,7 +210,7 @@ $('#form-com').onsubmit = async e => {
   if (!t) return;
   if (!atual.comentarios) atual.comentarios = [];
   atual.comentarios.push({ autor: usuario, texto: t });
-  await supabase.from('posts').upsert({ id: atual.id, autor: atual.autor, planta_id: atual.plantaId, planta: atual.planta, texto: atual.texto, img: atual.img, cor: atual.cor, curtidas: atual.curtidas, comentarios: atual.comentarios });
+  await db.from('posts').upsert({ id: atual.id, autor: atual.autor, planta_id: atual.plantaId, planta: atual.planta, texto: atual.texto, img: atual.img, cor: atual.cor, curtidas: atual.curtidas, comentarios: atual.comentarios });
   $('#comentario').value = '';
   renderDetalhe();
 };
@@ -241,7 +241,7 @@ $('#form-post').onsubmit = async e => {
       comentarios: []
     };
 
-    const { data, error } = await supabase.from('posts').insert([novoPost]).select();
+    const { data, error } = await db.from('posts').insert([novoPost]).select();
     if (!error && data) posts.unshift(data[0]);
 
     e.target.reset();
@@ -259,14 +259,14 @@ const ESTAGIOS = { semente: '🌱 Semente', muda: '🌿 Muda', adulta: '🪴 Adu
 const restam = m => planta(m.id || m.planta_sistema_id)?.rega - dias(hoje(), m.ultima || m.ultima_rega);
 
 async function carregarMinhasPlantas() {
-  const { data, error } = await supabase.from('meu_jardim').select('*').eq('utilizador_id', usuarioId);
+  const { data, error } = await db.from('meu_jardim').select('*').eq('utilizador_id', usuarioId);
   if (!error) {
     minhas = data || [];
   }
 }
 
 async function salvarMinhaPlanta(m) {
-  await supabase.from('meu_jardim').upsert({
+  await db.from('meu_jardim').upsert({
     id: m.id,
     utilizador_id: usuarioId,
     planta_sistema_id: m.planta_sistema_id || m.id,
@@ -312,7 +312,7 @@ function renderPlantas() {
     };
     const rm = el('button', 'lixo', '🗑️');
     rm.onclick = async () => { 
-      if (m.id) await supabase.from('meu_jardim').delete().eq('id', m.id);
+      if (m.id) await db.from('meu_jardim').delete().eq('id', m.id);
       minhas.splice(i, 1); 
       renderPlantas(); 
     };
@@ -343,7 +343,7 @@ $('#form-add').onsubmit = async e => {
     estagio: document.querySelector('[name=estagio]:checked').value
   };
 
-  const { data, error } = await supabase.from('meu_jardim').insert([novaPlanta]).select();
+  const { data, error } = await db.from('meu_jardim').insert([novaPlanta]).select();
   if (!error && data) {
     minhas.push(data[0]);
     renderPlantas();
@@ -379,7 +379,9 @@ function renderGuia() {
   $('#dicas').replaceChildren(...DICAS.map(d => el('li', null, d)));
 }
 
-// Checa sessão ao carregar a página
-supabase.auth.getSession().then(({ data: { session } }) => {
-  if (session) iniciarSessao(session);
-});
+// Checa sessão ao carregar a página usando 'db'
+if (db) {
+  db.auth.getSession().then(({ data: { session } }) => {
+    if (session) iniciarSessao(session);
+  });
+}
