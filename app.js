@@ -1,6 +1,6 @@
 const SUPABASE_URL = 'https://gmgcscfnfnqylccsjkrz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_utS1fkmWSipevwSpQX_uEA_m3Bvy88_';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = s => document.querySelector(s);
 const hoje = () => new Date().toLocaleDateString('sv');
