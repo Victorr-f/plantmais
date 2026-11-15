@@ -1,11 +1,11 @@
+const SUPABASE_URL = 'https://gmgcscfnfnqylccsjkrz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_utS1fkmWSipevwSpQX_uEA_m3Bvy88_';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const $ = s => document.querySelector(s);
-const ler = (k, f) => { try { return JSON.parse(localStorage.getItem(k)) ?? f; } catch { return f; } };
-const salvar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { aviso('Sem espaço para salvar. Use fotos menores.'); } };
 const hoje = () => new Date().toLocaleDateString('sv');
 const dias = (a, b) => Math.round((Date.parse(a) - Date.parse(b)) / 864e5);
 const planta = id => PLANTAS.find(p => p.id === id);
-const b64 = u => btoa(String.fromCharCode(...u));
-const un64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 
 function el(tag, cls, txt) {
   const e = document.createElement(tag);
@@ -33,15 +33,9 @@ function ir(nome) {
   window.scrollTo(0, 0);
 }
 
-let usuario, posts, minhas, atual, filtro = 'Tudo', estacao;
-
-async function hash(senha, sal) {
-  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(senha), 'PBKDF2', false, ['deriveBits']);
-  const b = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: sal, iterations: 150000, hash: 'SHA-256' }, k, 256);
-  return b64(new Uint8Array(b));
-}
-
+let usuario = null, usuarioId = null, posts = [], minhas = [], atual, filtro = 'Tudo', estacao;
 let cadastro = false;
+
 function modo(c) {
   cadastro = c;
   $('#campo-nome').hidden = !c;
@@ -53,49 +47,54 @@ function modo(c) {
 }
 $('#alternar').onclick = () => modo(!cadastro);
 
+// Autenticação com Supabase
 $('#form-login').onsubmit = async e => {
   e.preventDefault();
   const erro = $('#erro-login');
-  const chave = 'u:' + $('#email').value.trim().toLowerCase();
+  const email = $('#email').value.trim();
   const senha = $('#senha').value;
-  const contas = ler('contas', {});
   erro.textContent = '';
-  if (!window.crypto?.subtle) return (erro.textContent = 'Abra o site em um endereço seguro (https ou localhost).');
+
   if (cadastro) {
-    if (contas[chave]) return (erro.textContent = 'Este e-mail já tem conta.');
-    const sal = crypto.getRandomValues(new Uint8Array(16));
-    contas[chave] = { nome: $('#nome').value.trim(), sal: b64(sal), h: await hash(senha, sal) };
-    salvar('contas', contas);
+    const nome = $('#nome').value.trim();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: senha,
+      options: { data: { nome } }
+    });
+    if (error) return (erro.textContent = error.message);
+    aviso('Conta criada! Faça login.');
+    modo(false);
   } else {
-    const c = contas[chave];
-    if (!c || (await hash(senha, un64(c.sal))) !== c.h) return (erro.textContent = 'E-mail ou senha incorretos.');
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+    if (error) return (erro.textContent = 'E-mail ou senha incorretos.');
+    iniciarSessao(data.session);
   }
-  sessionStorage.setItem('sessao', chave);
-  $('#senha').value = '';
-  iniciar();
 };
 
-function iniciar() {
-  const chave = sessionStorage.getItem('sessao');
-  const conta = ler('contas', {})[chave];
-  if (!conta) return;
-  usuario = conta.nome;
+async function iniciarSessao(session) {
+  if (!session) return;
+  usuarioId = session.user.id;
+  usuario = session.user.user_metadata?.nome || session.user.email.split('@')[0];
   $('#gaveta-nome').textContent = usuario;
-  posts = ler('posts', null) || POSTS_INICIAIS;
-  minhas = ler('minhas:' + chave, []);
-  minhas.chave = chave;
-  estacao = estacaoAtual();
+  
   $('#menu').hidden = false;
+  estacao = estacaoAtual();
+  
+  await carregarPosts();
+  await carregarMinhasPlantas();
+
   renderFiltros();
   renderFeed();
   renderPlantas();
   renderGuia();
   ir('feed');
-  checar();
 }
 
-$('#sair').onclick = () => {
-  sessionStorage.removeItem('sessao');
+$('#sair').onclick = async () => {
+  await supabase.auth.signOut();
+  usuario = null;
+  usuarioId = null;
   $('#form-login').reset();
   modo(false);
   $('#menu').hidden = true;
@@ -110,14 +109,14 @@ document.querySelectorAll('[data-ir]').forEach(b => {
 });
 
 function midia(p) {
-  if (p.img?.startsWith('data:image/jpeg')) {
+  if (p.img?.startsWith('data:image/jpeg') || p.img?.startsWith('http')) {
     const i = el('img');
     i.src = p.img;
-    i.alt = p.planta;
+    i.alt = p.planta || 'Planta';
     return i;
   }
-  const d = el('div', 'emoji', p.emoji);
-  d.style.background = p.cor;
+  const d = el('div', 'emoji', p.emoji || '🌱');
+  d.style.background = p.cor || '#dcedc8';
   d.style.height = (p.alt || 240) + 'px';
   return d;
 }
@@ -132,22 +131,31 @@ function renderFiltros() {
   });
 }
 
-function curtir(p) {
+async function carregarPosts() {
+  const { data, error } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
+  if (error || !data || data.length === 0) {
+    posts = POSTS_INICIAIS.map((p, index) => ({ ...p, id: index + 1, curtidas: 0, curtiu: false, comentarios: [] }));
+  } else {
+    posts = data;
+  }
+}
+
+async function curtir(p) {
   p.curtiu = !p.curtiu;
   p.curtidas += p.curtiu ? 1 : -1;
-  salvar('posts', posts);
+  await supabase.from('posts').upsert({ id: p.id, autor: p.autor, planta_id: p.plantaId, planta: p.planta, texto: p.texto, img: p.img, cor: p.cor, curtidas: p.curtidas, comentarios: p.comentarios });
 }
 
 function renderFeed() {
   const q = $('#busca').value.trim().toLowerCase();
   const g = $('#grade');
   g.replaceChildren();
-  const lista = posts.filter(p => (filtro === 'Tudo' || planta(p.plantaId)?.tipo === filtro) && `${p.planta} ${p.texto} ${p.autor}`.toLowerCase().includes(q));
+  const lista = posts.filter(p => (filtro === 'Tudo' || planta(p.plantaId)?.tipo === filtro) && `${p.planta || ''} ${p.texto || ''} ${p.autor || ''}`.toLowerCase().includes(q));
   if (!lista.length) g.append(el('p', 'sub', 'Nenhuma foto encontrada.'));
   lista.forEach(p => {
     const c = el('article', 'card');
     const m = el('button', 'midia');
-    m.setAttribute('aria-label', 'Abrir ' + p.planta);
+    m.setAttribute('aria-label', 'Abrir ' + (p.planta || 'planta'));
     m.append(midia(p));
     m.onclick = () => abrir(p.id);
     const info = el('div', 'info');
@@ -180,12 +188,13 @@ function renderDetalhe() {
   c.replaceChildren();
   if (pl) {
     c.append(el('strong', null, 'Como cuidar'));
-    [`Luz: ${pl.luz}`, `Regar a cada ${pl.rega} dias, de manhã cedo ou no fim da tarde`, `Onde plantar: ${pl.vaso}`, `Estações: ${pl.est.join(', ')}`, pl.dica].forEach(t => c.append(el('p', null, t)));
+    [`Luz: ${pl.luz}`, `Regar a cada ${pl.rega} dias`, `Onde plantar: ${pl.vaso}`, `Estações: ${pl.est.join(', ')}`, pl.dica].forEach(t => c.append(el('p', null, t)));
   }
   const lista = $('#lista-com');
   lista.replaceChildren();
-  if (!p.comentarios.length) lista.append(el('li', 'sub', 'Seja o primeiro a comentar.'));
-  p.comentarios.forEach(x => {
+  const coms = p.comentarios || [];
+  if (!coms.length) lista.append(el('li', 'sub', 'Seja o primeiro a comentar.'));
+  coms.forEach(x => {
     const li = el('li');
     li.append(el('strong', null, x.autor + ': '), document.createTextNode(x.texto));
     lista.append(li);
@@ -195,42 +204,15 @@ function renderDetalhe() {
 $('#voltar').onclick = () => { renderFeed(); ir('feed'); };
 $('#det-curtir').onclick = () => { curtir(atual); renderDetalhe(); };
 
-$('#form-com').onsubmit = e => {
+$('#form-com').onsubmit = async e => {
   e.preventDefault();
   const t = $('#comentario').value.trim().slice(0, 200);
   if (!t) return;
+  if (!atual.comentarios) atual.comentarios = [];
   atual.comentarios.push({ autor: usuario, texto: t });
-  salvar('posts', posts);
+  await supabase.from('posts').upsert({ id: atual.id, autor: atual.autor, planta_id: atual.plantaId, planta: atual.planta, texto: atual.texto, img: atual.img, cor: atual.cor, curtidas: atual.curtidas, comentarios: atual.comentarios });
   $('#comentario').value = '';
   renderDetalhe();
-};
-
-$('#det-baixar').onclick = () => {
-  let url = atual.img?.startsWith('data:image/jpeg') ? atual.img : null;
-  if (!url) {
-    const c = document.createElement('canvas');
-    c.width = c.height = 600;
-    const x = c.getContext('2d');
-    x.fillStyle = atual.cor;
-    x.fillRect(0, 0, 600, 600);
-    x.font = '260px serif';
-    x.textAlign = 'center';
-    x.textBaseline = 'middle';
-    x.fillText(atual.emoji, 300, 300);
-    url = c.toDataURL('image/png');
-  }
-  const a = el('a');
-  a.href = url;
-  a.download = `plant-${atual.id}.${url.startsWith('data:image/png') ? 'png' : 'jpg'}`;
-  a.click();
-};
-
-$('#det-comp').onclick = async () => {
-  const dados = { title: 'Plant+', text: `${atual.planta} no Plant+: ${atual.texto}` };
-  try {
-    if (navigator.share) await navigator.share(dados);
-    else { await navigator.clipboard.writeText(dados.text); aviso('Texto copiado.'); }
-  } catch { /* compartilhamento cancelado */ }
 };
 
 $('#post-planta').replaceChildren(...PLANTAS.map(p => Object.assign(el('option', null, p.nome), { value: p.id })));
@@ -240,7 +222,6 @@ $('#form-post').onsubmit = async e => {
   e.preventDefault();
   const f = $('#foto').files[0];
   if (!f || !/^image\/(jpeg|png|webp)$/.test(f.type)) return aviso('Escolha uma foto JPG, PNG ou WebP.');
-  if (f.size > 10e6) return aviso('A foto deve ter até 10 MB.');
   try {
     const bmp = await createImageBitmap(f);
     const r = Math.min(1, 800 / Math.max(bmp.width, bmp.height));
@@ -249,8 +230,20 @@ $('#form-post').onsubmit = async e => {
     c.height = Math.round(bmp.height * r);
     c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
     const pl = planta($('#post-planta').value);
-    posts.unshift({ id: Date.now(), autor: usuario, plantaId: pl.id, planta: pl.nome, texto: $('#post-texto').value.trim().slice(0, 200), img: c.toDataURL('image/jpeg', 0.8), curtidas: 0, curtiu: false, comentarios: [] });
-    salvar('posts', posts);
+    
+    const novoPost = {
+      autor: usuario,
+      planta_id: pl.id,
+      planta: pl.nome,
+      texto: $('#post-texto').value.trim().slice(0, 200),
+      img: c.toDataURL('image/jpeg', 0.8),
+      curtidas: 0,
+      comentarios: []
+    };
+
+    const { data, error } = await supabase.from('posts').insert([novoPost]).select();
+    if (!error && data) posts.unshift(data[0]);
+
     e.target.reset();
     filtro = 'Tudo';
     renderFiltros();
@@ -263,37 +256,66 @@ $('#form-post').onsubmit = async e => {
 };
 
 const ESTAGIOS = { semente: '🌱 Semente', muda: '🌿 Muda', adulta: '🪴 Adulta', frutificando: '🍅 Frutificando' };
-const restam = m => planta(m.id).rega - dias(hoje(), m.ultima);
+const restam = m => planta(m.id || m.planta_sistema_id)?.rega - dias(hoje(), m.ultima || m.ultima_rega);
 
-function salvarMinhas() {
-  salvar('minhas:' + minhas.chave, minhas);
+async function carregarMinhasPlantas() {
+  const { data, error } = await supabase.from('meu_jardim').select('*').eq('utilizador_id', usuarioId);
+  if (!error) {
+    minhas = data || [];
+  }
+}
+
+async function salvarMinhaPlanta(m) {
+  await supabase.from('meu_jardim').upsert({
+    id: m.id,
+    utilizador_id: usuarioId,
+    planta_sistema_id: m.planta_sistema_id || m.id,
+    apelido: m.apelido || planta(m.id)?.nome,
+    ultima_rega: m.ultima || m.ultima_rega || hoje(),
+    data_plantio: m.data || m.data_plantio || hoje(),
+    estagio: m.estagio || 'semente'
+  });
 }
 
 function renderPlantas() {
   const pend = minhas.filter(m => restam(m) <= 0);
-  $('#banner').textContent = pend.length ? `Rega pendente: ${pend.length} planta(s). Melhor horário: antes das 9h ou depois das 17h.` : 'Nenhuma rega pendente hoje.';
+  $('#banner').textContent = pend.length ? `Rega pendente: ${pend.length} planta(s).` : 'Nenhuma rega pendente hoje.';
   $('#banner').classList.toggle('alerta', pend.length > 0);
   document.querySelector('[data-ir=plantas]').dataset.n = pend.length || '';
   const l = $('#lista-plantas');
   l.replaceChildren();
-  if (!minhas.length) l.append(el('li', 'sub', 'Adicione as plantas que você cultiva para receber avisos de rega.'));
+  if (!minhas.length) l.append(el('li', 'sub', 'Adicione as plantas que você cultiva.'));
   minhas.forEach((m, i) => {
-    const pl = planta(m.id), r = restam(m);
+    const plantaId = m.planta_sistema_id || m.id;
+    const pl = planta(plantaId);
+    if (!pl) return;
+    const r = restam(m);
     const li = el('li', 'cultivo');
     const t = el('div', 'dados');
     t.append(el('strong', 'nome', `${pl.emoji} ${pl.nome}`));
-    if (m.data) {
-      const n = dias(hoje(), m.data);
-      t.append(el('span', null, 'Data de plantio:'), el('b', null, m.data.split('-').reverse().join('/')), el('small', null, n <= 0 ? 'Plantado hoje' : `Plantado há ${n} dia${n > 1 ? 's' : ''}`));
+    
+    const dataPlantio = m.data_plantio || m.data;
+    if (dataPlantio) {
+      const n = dias(hoje(), dataPlantio);
+      t.append(el('span', null, 'Data de plantio:'), el('b', null, dataPlantio.split('-').reverse().join('/')), el('small', null, n <= 0 ? 'Plantado hoje' : `Plantado há ${n} dia(s)`));
     }
     t.append(el('small', r <= 0 ? 'regar' : null, r <= 0 ? 'Regar hoje' : `Próxima rega em ${r} dia(s)`));
     if (m.estagio in ESTAGIOS) t.append(el('span', 'tag ' + m.estagio, ESTAGIOS[m.estagio]));
+    
     const lado = el('div', 'lado');
     const ok = el('button', 'btn pequeno', 'Reguei');
-    ok.onclick = () => { m.ultima = hoje(); salvarMinhas(); renderPlantas(); };
+    ok.onclick = async () => { 
+      m.ultima = hoje(); 
+      m.ultima_rega = hoje();
+      await salvarMinhaPlanta(m); 
+      renderPlantas(); 
+    };
     const rm = el('button', 'lixo', '🗑️');
-    rm.setAttribute('aria-label', 'Remover ' + pl.nome);
-    rm.onclick = () => { minhas.splice(i, 1); salvarMinhas(); renderPlantas(); };
+    rm.onclick = async () => { 
+      if (m.id) await supabase.from('meu_jardim').delete().eq('id', m.id);
+      minhas.splice(i, 1); 
+      renderPlantas(); 
+    };
     lado.append(ok, rm);
     li.append(t, lado);
     l.append(li);
@@ -307,34 +329,30 @@ $('#cancelar').onclick = fecharModal;
 modal.onclick = e => { if (e.target === modal) fecharModal(); };
 $('#hamb').onclick = () => { $('#gaveta').hidden = !$('#gaveta').hidden; };
 
-$('#form-add').onsubmit = e => {
+$('#form-add').onsubmit = async e => {
   e.preventDefault();
-  const id = $('#add-planta').value;
-  if (minhas.some(m => m.id === id)) return aviso('Você já adicionou essa planta.');
-  minhas.push({ id, ultima: '1970-01-01', data: $('#add-data').value || hoje(), estagio: document.querySelector('[name=estagio]:checked').value });
-  salvarMinhas();
-  renderPlantas();
-  fecharModal();
+  const plantaId = $('#add-planta').value;
+  if (minhas.some(m => (m.planta_sistema_id || m.id) === plantaId)) return aviso('Você já adicionou essa planta.');
+  
+  const novaPlanta = {
+    utilizador_id: usuarioId,
+    planta_sistema_id: plantaId,
+    apelido: planta(plantaId)?.nome,
+    ultima_rega: hoje(),
+    data_plantio: $('#add-data').value || hoje(),
+    estagio: document.querySelector('[name=estagio]:checked').value
+  };
+
+  const { data, error } = await supabase.from('meu_jardim').insert([novaPlanta]).select();
+  if (!error && data) {
+    minhas.push(data[0]);
+    renderPlantas();
+    fecharModal();
+    aviso('Planta adicionada ao jardim!');
+  } else {
+    aviso('Erro ao salvar planta.');
+  }
 };
-
-$('#notif').onclick = async () => {
-  if (!('Notification' in window)) return aviso('Este navegador não suporta notificações.');
-  aviso((await Notification.requestPermission()) === 'granted' ? 'Notificações ativadas.' : 'Notificações bloqueadas.');
-};
-
-function checar() {
-  if (!minhas) return;
-  renderPlantas();
-  const agora = new Date().toTimeString().slice(0, 5);
-  if (!('Notification' in window) || Notification.permission !== 'granted' || agora < $('#hora').value) return;
-  minhas.filter(m => restam(m) <= 0 && m.avisada !== hoje()).forEach(m => {
-    new Notification('Hora de regar: ' + planta(m.id).nome, { body: 'Melhor horário: antes das 9h ou depois das 17h.' });
-    m.avisada = hoje();
-  });
-  salvarMinhas();
-}
-
-setInterval(checar, 60000);
 
 function estacaoAtual() {
   const m = new Date().getMonth();
@@ -361,4 +379,7 @@ function renderGuia() {
   $('#dicas').replaceChildren(...DICAS.map(d => el('li', null, d)));
 }
 
-if (sessionStorage.getItem('sessao')) iniciar();
+// Checa sessão ao carregar a página
+supabase.auth.getSession().then(({ data: { session } }) => {
+  if (session) iniciarSessao(session);
+});
