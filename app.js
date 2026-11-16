@@ -22,7 +22,7 @@ function aviso(t) {
   aviso.t = setTimeout(() => { a.hidden = true; }, 3000);
 }
 
-const TITULOS = { feed: 'Plant+ | Minhas Fotos', detalhe: 'Plant+ | Foto', postar: 'Plant+ | Postar foto', plantas: 'Plant+ | Cultivos', guia: 'Plant+ | Guia da horta' };
+const TITULOS = { feed: 'Plant+ | Inicio', detalhe: 'Plant+ | Foto', postar: 'Plant+ | Postar foto', plantas: 'Plant+ | Cultivos', guia: 'Plant+ | Guia da horta' };
 
 function ir(nome) {
   document.querySelectorAll('.tela').forEach(t => t.classList.toggle('ativa', t.id === nome));
@@ -469,13 +469,11 @@ function renderGuia() {
   $('#dicas').replaceChildren(...DICAS.map(d => el('li', null, d)));
 }
 
-// Checa sessão ao carregar a página usando 'db'
 if (db) {
   db.auth.getSession().then(({ data: { session } }) => {
     if (session) iniciarSessao(session);
   });
 }
-// PWA: apenas os arquivos estáticos são guardados no cache; dados pessoais continuam no Supabase.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Service Worker:', error));
