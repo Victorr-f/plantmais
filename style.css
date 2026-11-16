@@ -276,3 +276,12 @@ input[type=time] { width: auto; }
   .grade { columns: 4 200px; }
   .fab { left: calc(50% + 280px); transform: none; }
 }
+
+/* Ações de editar e excluir */
+.cultivo .lado { min-width: 88px; }
+.cultivo .lado .btn { width: 100%; text-align: center; }
+.acoes { margin-bottom: 12px; }
+@media (max-width: 380px) {
+  .lista .cultivo { padding: 12px; align-items: start; }
+  .cultivo .nome { font-size: 1.1rem; }
+}

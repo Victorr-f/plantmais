@@ -22,7 +22,7 @@ function aviso(t) {
   aviso.t = setTimeout(() => { a.hidden = true; }, 3000);
 }
 
-const TITULOS = { feed: 'Plant+ | Início', detalhe: 'Plant+ | Foto', postar: 'Plant+ | Postar foto', plantas: 'Plant+ | Cultivos', guia: 'Plant+ | Guia da horta' };
+const TITULOS = { feed: 'Plant+ | Minhas Fotos', detalhe: 'Plant+ | Foto', postar: 'Plant+ | Postar foto', plantas: 'Plant+ | Cultivos', guia: 'Plant+ | Guia da horta' };
 
 function ir(nome) {
   document.querySelectorAll('.tela').forEach(t => t.classList.toggle('ativa', t.id === nome));
@@ -35,6 +35,14 @@ function ir(nome) {
 
 let usuario = null, usuarioId = null, posts = [], minhas = [], atual, filtro = 'Tudo', estacao;
 let cadastro = false;
+let edicaoCultivoId = null;
+let edicaoPostId = null;
+const erroBanco = (operacao, error) => {
+  console.error(`[Plant+] ${operacao}`, error);
+  aviso(`Erro ao ${operacao}: ${error?.message || 'verifique o Console (F12)'}`);
+};
+const donoPost = p => !!usuarioId && p.usuario_id === usuarioId;
+
 
 function modo(c) {
   cadastro = c;
@@ -95,6 +103,7 @@ $('#sair').onclick = async () => {
   await db.auth.signOut();
   usuario = null;
   usuarioId = null;
+  posts = []; minhas = []; atual = null;
   $('#form-login').reset();
   modo(false);
   $('#menu').hidden = true;
@@ -104,12 +113,13 @@ $('#sair').onclick = async () => {
 document.querySelectorAll('[data-ir]').forEach(b => {
   b.onclick = () => {
     if (b.dataset.ir === 'feed') renderFeed();
+    if (b.dataset.ir === 'postar' && edicaoPostId !== null) resetarEdicaoPost();
     ir(b.dataset.ir);
   };
 });
 
 function midia(p) {
-  if (p.img?.startsWith('data:image/jpeg') || p.img?.startsWith('http')) {
+  if (p.img?.startsWith('data:image/') || p.img?.startsWith('https://')) {
     const i = el('img');
     i.src = p.img;
     i.alt = p.planta || 'Planta';
@@ -132,26 +142,21 @@ function renderFiltros() {
 }
 
 async function carregarPosts() {
-  const { data, error } = await db.from('posts').select('*').order('created_at', { ascending: false });
-  if (error || !data || data.length === 0) {
-    posts = POSTS_INICIAIS.map((p, index) => ({ ...p, id: index + 1, curtidas: 0, curtiu: false, comentarios: [] }));
-  } else {
-    posts = data;
-  }
-}
-
-async function curtir(p) {
-  p.curtiu = !p.curtiu;
-  p.curtidas += p.curtiu ? 1 : -1;
-  await db.from('posts').upsert({ id: p.id, autor: p.autor, planta_id: p.plantaId, planta: p.planta, texto: p.texto, img: p.img, cor: p.cor, curtidas: p.curtidas, comentarios: p.comentarios });
+  if (!db || !usuarioId) return;
+  const { data, error } = await db.from('posts')
+    .select('*')
+    .eq('usuario_id', usuarioId)
+    .order('created_at', { ascending: false });
+  if (error) { posts = []; erroBanco('carregar suas fotos', error); return; }
+  posts = data || [];
 }
 
 function renderFeed() {
   const q = $('#busca').value.trim().toLowerCase();
   const g = $('#grade');
   g.replaceChildren();
-  const lista = posts.filter(p => (filtro === 'Tudo' || planta(p.plantaId)?.tipo === filtro) && `${p.planta || ''} ${p.texto || ''} ${p.autor || ''}`.toLowerCase().includes(q));
-  if (!lista.length) g.append(el('p', 'sub', 'Nenhuma foto encontrada.'));
+  const lista = posts.filter(p => (filtro === 'Tudo' || planta(p.planta_id)?.tipo === filtro) && `${p.planta || ''} ${p.texto || ''} ${p.autor || ''}`.toLowerCase().includes(q));
+  if (!lista.length) g.append(el('p', 'sub', 'Nenhuma foto encontrada. Adicione uma foto da sua planta!'));
   lista.forEach(p => {
     const c = el('article', 'card');
     const m = el('button', 'midia');
@@ -160,10 +165,8 @@ function renderFeed() {
     m.onclick = () => abrir(p.id);
     const info = el('div', 'info');
     const t = el('div');
-    t.append(el('strong', null, p.planta), el('small', null, p.autor));
-    const l = el('button', 'curtir', (p.curtiu ? '❤️ ' : '🤍 ') + p.curtidas);
-    l.onclick = () => { curtir(p); renderFeed(); };
-    info.append(t, l);
+    t.append(el('strong', null, p.planta), el('small', null, p.texto || ''));
+    info.append(t);
     c.append(m, info);
     g.append(c);
   });
@@ -178,103 +181,164 @@ function abrir(id) {
 }
 
 function renderDetalhe() {
-  const p = atual, pl = planta(p.plantaId);
+  const p = atual;
+  if (!p) { ir('feed'); return; }
+  const pl = planta(p.planta_id);
   $('#det-midia').replaceChildren(midia(p));
-  $('#det-titulo').textContent = p.planta;
-  $('#det-autor').textContent = 'por ' + p.autor;
-  $('#det-texto').textContent = p.texto;
-  $('#det-curtir').textContent = (p.curtiu ? '❤️ ' : '🤍 ') + p.curtidas;
-  const c = $('#det-cuidado');
-  c.replaceChildren();
+  $('#det-titulo').textContent = p.planta || 'Minha planta';
+  $('#det-texto').textContent = p.texto || '';
+  $('#det-editar').hidden = !donoPost(p);
+  $('#det-excluir').hidden = !donoPost(p);
+  const cuidado = $('#det-cuidado');
+  cuidado.replaceChildren();
   if (pl) {
-    c.append(el('strong', null, 'Como cuidar'));
-    [`Luz: ${pl.luz}`, `Regar a cada ${pl.rega} dias`, `Onde plantar: ${pl.vaso}`, `Estações: ${pl.est.join(', ')}`, pl.dica].forEach(t => c.append(el('p', null, t)));
+    cuidado.append(el('strong', null, 'Como cuidar'));
+    [`Luz: ${pl.luz}`, `Regar a cada ${pl.rega} dias`, `Onde plantar: ${pl.vaso}`, `Estações: ${pl.est.join(', ')}`, pl.dica]
+      .forEach(t => cuidado.append(el('p', null, t)));
   }
-  const lista = $('#lista-com');
-  lista.replaceChildren();
-  const coms = p.comentarios || [];
-  if (!coms.length) lista.append(el('li', 'sub', 'Seja o primeiro a comentar.'));
-  coms.forEach(x => {
-    const li = el('li');
-    li.append(el('strong', null, x.autor + ': '), document.createTextNode(x.texto));
-    lista.append(li);
-  });
 }
 
 $('#voltar').onclick = () => { renderFeed(); ir('feed'); };
-$('#det-curtir').onclick = () => { curtir(atual); renderDetalhe(); };
 
-$('#form-com').onsubmit = async e => {
-  e.preventDefault();
-  const t = $('#comentario').value.trim().slice(0, 200);
-  if (!t) return;
-  if (!atual.comentarios) atual.comentarios = [];
-  atual.comentarios.push({ autor: usuario, texto: t });
-  await db.from('posts').upsert({ id: atual.id, autor: atual.autor, planta_id: atual.plantaId, planta: atual.planta, texto: atual.texto, img: atual.img, cor: atual.cor, curtidas: atual.curtidas, comentarios: atual.comentarios });
-  $('#comentario').value = '';
-  renderDetalhe();
+$('#det-editar').onclick = () => {
+  if (!atual || !donoPost(atual)) return;
+  edicaoPostId = atual.id;
+  $('#post-planta').value = atual.planta_id;
+  $('#post-texto').value = atual.texto || '';
+  $('#foto').required = false;
+  $('#foto-ajuda').hidden = false;
+  $('#post-titulo').textContent = 'Editar publicação';
+  $('#post-salvar').textContent = 'Salvar alterações';
+  $('#post-cancelar').hidden = false;
+  ir('postar');
+};
+
+function resetarEdicaoPost() {
+  edicaoPostId = null;
+  $('#form-post').reset();
+  $('#foto').required = true;
+  $('#foto-ajuda').hidden = true;
+  $('#post-titulo').textContent = 'Postar foto';
+  $('#post-salvar').textContent = 'Publicar';
+  $('#post-cancelar').hidden = true;
+}
+$('#post-cancelar').onclick = () => { resetarEdicaoPost(); renderFeed(); ir('feed'); };
+$('#det-excluir').onclick = async () => {
+  if (!atual || !donoPost(atual) || !confirm('Excluir esta publicação definitivamente?')) return;
+  const id = atual.id;
+  const { data, error } = await db.from('posts').delete()
+    .eq('id', id).eq('usuario_id', usuarioId).select('id');
+  if (error) return erroBanco('excluir publicação', error);
+  if (!data?.length) return aviso('Publicação não encontrada ou sem permissão.');
+  posts = posts.filter(p => p.id !== id);
+  atual = null;
+  renderFeed(); ir('feed'); aviso('Publicação excluída.');
 };
 
 $('#post-planta').replaceChildren(...PLANTAS.map(p => Object.assign(el('option', null, p.nome), { value: p.id })));
 $('#add-planta').replaceChildren(...PLANTAS.map(p => Object.assign(el('option', null, p.nome), { value: p.id })));
 
+async function fotoParaBase64(f) {
+  if (!f || !/^image\/(jpeg|png|webp)$/.test(f.type)) throw new Error('Escolha uma foto JPG, PNG ou WebP.');
+  if (f.size > 10 * 1024 * 1024) throw new Error('A foto deve ter até 10 MB.');
+  const bmp = await createImageBitmap(f);
+  try {
+    const escala = Math.min(1, 800 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(bmp.width * escala));
+    c.height = Math.max(1, Math.round(bmp.height * escala));
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.65);
+  } finally { bmp.close?.(); }
+}
+
 $('#form-post').onsubmit = async e => {
   e.preventDefault();
-  const f = $('#foto').files[0];
-  if (!f || !/^image\/(jpeg|png|webp)$/.test(f.type)) return aviso('Escolha uma foto JPG, PNG ou WebP.');
+  if (!db || !usuarioId) return aviso('Faça login para salvar fotos.');
+  const pl = planta($('#post-planta').value);
+  if (!pl) return aviso('Selecione uma planta válida.');
+  const texto = $('#post-texto').value.trim().slice(0, 200);
+  if (!texto) return aviso('Escreva uma legenda.');
+  const botao = $('#post-salvar');
+  botao.disabled = true;
   try {
-    const bmp = await createImageBitmap(f);
-    const r = Math.min(1, 800 / Math.max(bmp.width, bmp.height));
-    const c = document.createElement('canvas');
-    c.width = Math.round(bmp.width * r);
-    c.height = Math.round(bmp.height * r);
-    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-    const pl = planta($('#post-planta').value);
-    
-    const novoPost = {
-      autor: usuario,
-      planta_id: pl.id,
-      planta: pl.nome,
-      texto: $('#post-texto').value.trim().slice(0, 200),
-      img: c.toDataURL('image/jpeg', 0.8),
-      curtidas: 0,
-      comentarios: []
-    };
-
-    const { data, error } = await db.from('posts').insert([novoPost]).select();
-    if (!error && data) posts.unshift(data[0]);
-
-    e.target.reset();
-    filtro = 'Tudo';
-    renderFiltros();
-    renderFeed();
-    ir('feed');
-    aviso('Foto publicada.');
-  } catch {
-    aviso('Não foi possível ler essa foto.');
-  }
+    const foto = $('#foto').files[0];
+    const campos = { planta_id: pl.id, planta: pl.nome, texto };
+    if (foto) campos.img = await fotoParaBase64(foto);
+    if (edicaoPostId !== null) {
+      const { data, error } = await db.from('posts')
+        .update(campos).eq('id', edicaoPostId).eq('usuario_id', usuarioId)
+        .select().single();
+      if (error) throw error;
+      const anterior = posts.find(p => p.id === data.id);
+      if (anterior) Object.assign(anterior, data);
+      atual = anterior || data;
+      resetarEdicaoPost(); renderFeed(); renderDetalhe(); ir('detalhe');
+      aviso('Foto atualizada!');
+    } else {
+      if (!foto) throw new Error('Escolha uma foto para publicar.');
+      const { data, error } = await db.from('posts')
+        .insert({ ...campos, usuario_id: usuarioId, autor: usuario })
+        .select().single();
+      if (error) throw error;
+      posts.unshift(data);
+      resetarEdicaoPost(); filtro = 'Tudo'; renderFiltros(); renderFeed(); ir('feed');
+      aviso('Foto salva na sua galeria!');
+    }
+  } catch (error) { erroBanco('salvar foto', error); }
+  finally { botao.disabled = false; }
 };
 
 const ESTAGIOS = { semente: '🌱 Semente', muda: '🌿 Muda', adulta: '🪴 Adulta', frutificando: '🍅 Frutificando' };
-const restam = m => planta(m.id || m.planta_sistema_id)?.rega - dias(hoje(), m.ultima || m.ultima_rega);
+const restam = m => {
+  const pl = planta(m.planta_sistema_id);
+  if (!pl || !m.ultima_rega) return Infinity;
+  return pl.rega - dias(hoje(), m.ultima_rega);
+};
+
+function erroJardim(operacao, error) {
+  console.error(`Supabase - ${operacao}:`, error);
+  aviso(`Não foi possível ${operacao}. Consulte o Console (F12).`);
+}
 
 async function carregarMinhasPlantas() {
-  const { data, error } = await db.from('meu_jardim').select('*').eq('utilizador_id', usuarioId);
-  if (!error) {
+  if (!db || !usuarioId) return;
+  try {
+    const { data, error } = await db.from('meu_jardim')
+      .select('*')
+      .eq('utilizador_id', usuarioId)
+      .order('criado_em', { ascending: false });
+    if (error) throw error;
     minhas = data || [];
+  } catch (error) {
+    erroJardim('carregar o jardim', error);
   }
 }
 
 async function salvarMinhaPlanta(m) {
-  await db.from('meu_jardim').upsert({
-    id: m.id,
-    utilizador_id: usuarioId,
-    planta_sistema_id: m.planta_sistema_id || m.id,
-    apelido: m.apelido || planta(m.id)?.nome,
-    ultima_rega: m.ultima || m.ultima_rega || hoje(),
-    data_plantio: m.data || m.data_plantio || hoje(),
-    estagio: m.estagio || 'semente'
-  });
+  if (!db || !usuarioId || !m.id) {
+    aviso('Faça login para atualizar o cultivo.');
+    return null;
+  }
+  try {
+    const { data, error } = await db.from('meu_jardim')
+      .update({
+        planta_sistema_id: m.planta_sistema_id,
+        apelido: m.apelido,
+        ultima_rega: m.ultima_rega,
+        data_plantio: m.data_plantio,
+        estagio: m.estagio
+      })
+      .eq('id', m.id)
+      .eq('utilizador_id', usuarioId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    erroJardim('atualizar o cultivo', error);
+    return null;
+  }
 }
 
 function renderPlantas() {
@@ -282,75 +346,101 @@ function renderPlantas() {
   $('#banner').textContent = pend.length ? `Rega pendente: ${pend.length} planta(s).` : 'Nenhuma rega pendente hoje.';
   $('#banner').classList.toggle('alerta', pend.length > 0);
   document.querySelector('[data-ir=plantas]').dataset.n = pend.length || '';
-  const l = $('#lista-plantas');
-  l.replaceChildren();
-  if (!minhas.length) l.append(el('li', 'sub', 'Adicione as plantas que você cultiva.'));
-  minhas.forEach((m, i) => {
-    const plantaId = m.planta_sistema_id || m.id;
-    const pl = planta(plantaId);
-    if (!pl) return;
-    const r = restam(m);
+  const lista = $('#lista-plantas');
+  lista.replaceChildren();
+  if (!minhas.length) lista.append(el('li', 'sub', 'Adicione as plantas que você cultiva.'));
+  minhas.forEach(m => {
+    const pl = planta(m.planta_sistema_id);
     const li = el('li', 'cultivo');
     const t = el('div', 'dados');
-    t.append(el('strong', 'nome', `${pl.emoji} ${pl.nome}`));
-    
-    const dataPlantio = m.data_plantio || m.data;
-    if (dataPlantio) {
-      const n = dias(hoje(), dataPlantio);
-      t.append(el('span', null, 'Data de plantio:'), el('b', null, dataPlantio.split('-').reverse().join('/')), el('small', null, n <= 0 ? 'Plantado hoje' : `Plantado há ${n} dia(s)`));
+    t.append(el('strong', 'nome', `${pl?.emoji || '🌱'} ${m.apelido || pl?.nome || m.planta_sistema_id}`));
+    if (m.data_plantio) {
+      const n = dias(hoje(), m.data_plantio);
+      t.append(el('span', null, 'Data de plantio:'), el('b', null, m.data_plantio.split('-').reverse().join('/')),
+        el('small', null, n <= 0 ? 'Plantado hoje' : `Plantado há ${n} dia(s)`));
     }
-    t.append(el('small', r <= 0 ? 'regar' : null, r <= 0 ? 'Regar hoje' : `Próxima rega em ${r} dia(s)`));
+    const r = restam(m);
+    t.append(el('small', r <= 0 ? 'regar' : null,
+      !Number.isFinite(r) ? 'Rega não configurada' : r <= 0 ? 'Regar hoje' : `Próxima rega em ${r} dia(s)`));
     if (m.estagio in ESTAGIOS) t.append(el('span', 'tag ' + m.estagio, ESTAGIOS[m.estagio]));
-    
     const lado = el('div', 'lado');
     const ok = el('button', 'btn pequeno', 'Reguei');
-    ok.onclick = async () => { 
-      m.ultima = hoje(); 
-      m.ultima_rega = hoje();
-      await salvarMinhaPlanta(m); 
-      renderPlantas(); 
+    ok.onclick = async () => {
+      ok.disabled = true;
+      const atualizado = await salvarMinhaPlanta({ ...m, ultima_rega: hoje() });
+      if (atualizado) { Object.assign(m, atualizado); renderPlantas(); aviso('Rega registrada!'); }
+      else ok.disabled = false;
     };
-    const rm = el('button', 'lixo', '🗑️');
-    rm.onclick = async () => { 
-      if (m.id) await db.from('meu_jardim').delete().eq('id', m.id);
-      minhas.splice(i, 1); 
-      renderPlantas(); 
+    const editar = el('button', 'btn claro pequeno', 'Editar');
+    editar.onclick = () => abrirModalCultivo(m);
+    const excluir = el('button', 'btn claro pequeno', 'Excluir');
+    excluir.onclick = async () => {
+      if (!confirm('Excluir este cultivo definitivamente?')) return;
+      excluir.disabled = true;
+      const { data, error } = await db.from('meu_jardim')
+        .delete().eq('id', m.id).eq('utilizador_id', usuarioId).select('id');
+      if (error) { erroBanco('excluir cultivo', error); excluir.disabled = false; return; }
+      if (!data?.length) { aviso('Cultivo não encontrado ou sem permissão.'); excluir.disabled = false; return; }
+      minhas = minhas.filter(item => item.id !== m.id);
+      renderPlantas(); aviso('Cultivo excluído.');
     };
-    lado.append(ok, rm);
-    li.append(t, lado);
-    l.append(li);
+    lado.append(ok, editar, excluir);
+    li.append(t, lado); lista.append(li);
   });
 }
 
 const modal = $('#modal');
-const fecharModal = () => { modal.hidden = true; };
-$('#fab').onclick = () => { $('#add-data').value = hoje(); modal.hidden = false; };
+function fecharModal() { modal.hidden = true; edicaoCultivoId = null; }
+function abrirModalCultivo(m = null) {
+  edicaoCultivoId = m?.id || null;
+  $('#form-add').reset();
+  $('#add-titulo').textContent = m ? 'Editar cultivo' : 'Seu cultivo';
+  $('#add-salvar').textContent = m ? 'Salvar alterações' : 'Adicionar';
+  $('#add-planta').value = m?.planta_sistema_id || PLANTAS[0].id;
+  $('#add-data').value = m?.data_plantio || hoje();
+  $('#add-apelido').value = m?.apelido || '';
+  const estagio = m?.estagio || 'semente';
+  const radio = [...document.querySelectorAll('[name=estagio]')].find(el => el.value === estagio);
+  if (radio) radio.checked = true;
+  modal.hidden = false;
+}
+$('#fab').onclick = () => abrirModalCultivo();
 $('#cancelar').onclick = fecharModal;
 modal.onclick = e => { if (e.target === modal) fecharModal(); };
 $('#hamb').onclick = () => { $('#gaveta').hidden = !$('#gaveta').hidden; };
 
 $('#form-add').onsubmit = async e => {
   e.preventDefault();
+  if (!db || !usuarioId) return aviso('Faça login para salvar uma planta.');
   const plantaId = $('#add-planta').value;
-  if (minhas.some(m => (m.planta_sistema_id || m.id) === plantaId)) return aviso('Você já adicionou essa planta.');
-  
-  const novaPlanta = {
-    utilizador_id: usuarioId,
+  if (!planta(plantaId)) return aviso('Planta inválida.');
+  const campos = {
     planta_sistema_id: plantaId,
-    apelido: planta(plantaId)?.nome,
-    ultima_rega: hoje(),
-    data_plantio: $('#add-data').value || hoje(),
+    apelido: $('#add-apelido').value.trim().slice(0, 60) || planta(plantaId).nome,
+    data_plantio: $('#add-data').value,
     estagio: document.querySelector('[name=estagio]:checked').value
   };
-
-  const { data, error } = await db.from('meu_jardim').insert([novaPlanta]).select();
-  if (!error && data) {
-    minhas.push(data[0]);
-    renderPlantas();
-    fecharModal();
-    aviso('Planta adicionada ao jardim!');
-  } else {
-    aviso('Erro ao salvar planta.');
+  const botao = $('#add-salvar');
+  botao.disabled = true;
+  try {
+    if (edicaoCultivoId) {
+      const atual = minhas.find(m => m.id === edicaoCultivoId);
+      const resultado = await salvarMinhaPlanta({ ...atual, ...campos });
+      if (!resultado) return;
+      Object.assign(atual, resultado);
+      fecharModal(); renderPlantas(); aviso('Cultivo atualizado!');
+    } else {
+      const { data, error } = await db.from('meu_jardim')
+        .insert({ ...campos, utilizador_id: usuarioId, ultima_rega: hoje() })
+        .select().single();
+      if (error) throw error;
+      minhas.push(data);
+      fecharModal(); renderPlantas(); aviso('Planta adicionada ao jardim!');
+    }
+  } catch (error) {
+    erroBanco('salvar cultivo', error);
+  } finally {
+    botao.disabled = false;
   }
 };
 
@@ -383,5 +473,11 @@ function renderGuia() {
 if (db) {
   db.auth.getSession().then(({ data: { session } }) => {
     if (session) iniciarSessao(session);
+  });
+}
+// PWA: apenas os arquivos estáticos são guardados no cache; dados pessoais continuam no Supabase.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Service Worker:', error));
   });
 }

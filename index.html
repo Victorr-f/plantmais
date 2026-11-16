@@ -3,9 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' https://gmgcscfnfnqylccsjkrz.supabase.co; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' https://gmgcscfnfnqylccsjkrz.supabase.co; base-uri 'none'; form-action 'self'; manifest-src 'self'; worker-src 'self'">
 <title>Plant+</title>
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1b4d2e">
 </head>
 <body>
 <header id="topo-app" class="appbar" hidden>
@@ -33,7 +35,8 @@
 
   <section id="feed" class="tela">
     <div class="topo">
-      <input id="busca" type="search" placeholder="Buscar plantas" aria-label="Buscar plantas" maxlength="40">
+      <h2>Minhas Fotos <span aria-label="Privado">🔒</span></h2>
+      <input id="busca" type="search" placeholder="Buscar minhas fotos" aria-label="Buscar plantas" maxlength="40">
     </div>
     <div id="filtros" class="filtros"></div>
     <div id="grade" class="grade"></div>
@@ -44,30 +47,24 @@
     <article class="painel largo">
       <div id="det-midia"></div>
       <h2 id="det-titulo"></h2>
-      <p id="det-autor" class="sub"></p>
       <p id="det-texto"></p>
       <div class="acoes">
-        <button id="det-curtir" class="btn claro pequeno"></button>
-        <button id="det-baixar" class="btn claro pequeno">Baixar foto</button>
-        <button id="det-comp" class="btn claro pequeno">Compartilhar</button>
+        <button id="det-editar" class="btn claro pequeno" hidden>Editar publicação</button>
+          <button id="det-excluir" class="btn claro pequeno" hidden>Excluir publicação</button>
       </div>
       <div id="det-cuidado" class="caixa"></div>
-      <h3>Comentários</h3>
-      <ul id="lista-com" class="lista"></ul>
-      <form id="form-com" class="linha">
-        <input id="comentario" maxlength="200" required placeholder="Escreva um comentário" aria-label="Comentário">
-        <button class="btn pequeno">Enviar</button>
-      </form>
     </article>
   </section>
 
   <section id="postar" class="tela">
     <form id="form-post" class="painel">
-      <h2>Postar foto</h2>
+      <h2 id="post-titulo">Postar foto</h2>
       <label>Foto<input id="foto" type="file" accept="image/jpeg,image/png,image/webp" required></label>
+      <p id="foto-ajuda" class="sub" hidden>Deixe o campo de foto vazio para manter a foto atual.</p>
       <label>Planta<select id="post-planta"></select></label>
       <label>Legenda<textarea id="post-texto" maxlength="200" rows="3" required></textarea></label>
-      <button class="btn">Publicar</button>
+      <button id="post-salvar" class="btn">Publicar</button>
+        <button id="post-cancelar" type="button" class="btn claro" hidden>Cancelar edição</button>
     </form>
   </section>
 
@@ -75,11 +72,6 @@
     <div class="coluna">
       <p id="banner" class="banner"></p>
       <ul id="lista-plantas" class="lista"></ul>
-      <div class="caixa lembrete">
-        <label>Receber aviso a partir das <input id="hora" type="time" value="07:00"></label>
-        <button id="notif" class="btn claro pequeno">Ativar notificações</button>
-        <p class="sub">Os avisos funcionam com o Plant+ aberto no navegador.</p>
-      </div>
     </div>
     <button id="fab" class="fab" aria-label="Adicionar cultivo"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
   </section>
@@ -101,9 +93,10 @@
 
 <div id="modal" class="modal" hidden>
   <form id="form-add" class="folha-modal">
-    <h2>Seu cultivo</h2>
+    <h2 id="add-titulo">Seu cultivo</h2>
     <p class="sub">Escolha a planta e a data de plantio 😄</p>
     <label>Planta<select id="add-planta"></select></label>
+    <label>Apelido<input id="add-apelido" maxlength="60" placeholder="Ex.: Minha alface"></label>
     <label>Data de plantio<input id="add-data" type="date" required></label>
     <fieldset class="estagios">
       <legend>Estágio da planta</legend>
@@ -114,13 +107,13 @@
     </fieldset>
     <div class="botoes">
       <button id="cancelar" type="button" class="btn claro">Cancelar</button>
-      <button class="btn">Adicionar</button>
+      <button id="add-salvar" class="btn">Adicionar</button>
     </div>
   </form>
 </div>
 
 <nav id="menu" hidden>
-  <button data-ir="feed"><svg class="ico" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Início</button>
+  <button data-ir="feed"><svg class="ico" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Minhas Fotos</button>
   <button data-ir="plantas"><svg class="ico" viewBox="0 0 24 24"><path d="M12 21v-9M12 12c0-4-3-6-7-6 0 4 3 6 7 6zM12 14c0-3 2-5 6-5 0 3-2 5-6 5 z"/></svg>Cultivos</button>
   <button data-ir="postar"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 7l1.5-3h5L16 7"/></svg>Postar</button>
   <button data-ir="guia"><svg class="ico" viewBox="0 0 24 24"><path d="M4 5h6a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H4zM20 5h-6a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h6z"/></svg>Guia</button>
