@@ -156,7 +156,7 @@ function renderFeed() {
   const g = $('#grade');
   g.replaceChildren();
   const lista = posts.filter(p => (filtro === 'Tudo' || planta(p.planta_id)?.tipo === filtro) && `${p.planta || ''} ${p.texto || ''} ${p.autor || ''}`.toLowerCase().includes(q));
-  if (!lista.length) g.append(el('p', 'sub', 'Nenhuma foto encontrada. Adicione uma foto da sua planta!'));
+  if (!lista.length) g.append(el('p', 'sub', 'Nenhuma foto encontrada.\n Adicione uma foto da sua planta!'));
   lista.forEach(p => {
     const c = el('article', 'card');
     const m = el('button', 'midia');
