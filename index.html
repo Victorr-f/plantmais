@@ -18,10 +18,13 @@
 </header>
 <aside id="gaveta" hidden>
   <p>Olá, <strong id="gaveta-nome"></strong></p>
+  <button id="alternar-notificacoes" class="btn claro btn-notificacoes" type="button" aria-pressed="false">🔕 Ativar notificações</button>
+  <p id="info-notificacoes" class="sub aviso-notificacoes">Lembretes às 8h e 18h, enquanto o Plant+ estiver aberto.</p>
   <button id="instalar-app" class="btn claro btn-instalar" type="button">📲 Instalar Plant+</button>
   <button id="sair" class="btn btn-sair" type="button">Sair da conta</button>
 </aside>
 
+<p id="status-conexao" class="status-conexao" role="status" hidden></p>
 <main>
   <section id="login" class="tela ativa">
     <form id="form-login" class="painel">
@@ -38,7 +41,7 @@
 
   <section id="feed" class="tela">
     <div class="topo">
-      <h2>Início <span aria-label="Privado"></span></h2>
+      <h2>Início <span aria-label="Privado">🔒</span></h2>
       <input id="busca" type="search" placeholder="Buscar minhas fotos" aria-label="Buscar plantas" maxlength="40">
     </div>
     <div id="filtros" class="filtros"></div>

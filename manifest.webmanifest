@@ -1,11 +1,11 @@
 {
-  "name": "Plant+",
+  "name": "Plant+ - Meu Jardim",
   "short_name": "Plant+",
   "description": "Acompanhe suas plantas e suas fotos privadas.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#4a5d23",
+  "background_color": "#dcedc8",
   "theme_color": "#1b4d2e",
   "icons": [
     {

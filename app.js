@@ -43,6 +43,24 @@ const erroBanco = (operacao, error) => {
 };
 const donoPost = p => !!usuarioId && p.usuario_id === usuarioId;
 
+// Mensagens específicas de conexão: sem internet não é erro de senha.
+const mensagemConexao = 'Verifique sua conexão com a internet e tente novamente.';
+const indisponivel = () => !navigator.onLine;
+function verificarConexao() {
+  const faixa = $('#status-conexao');
+  faixa.hidden = navigator.onLine;
+  if (!navigator.onLine) faixa.textContent = 'Sem conexão com a internet. Reconecte-se para continuar usando o Plant+.';
+}
+window.addEventListener('online', () => {
+  verificarConexao();
+  if (usuarioId) Promise.all([carregarPosts(), carregarMinhasPlantas()]).then(() => {
+    renderFeed(); renderPlantas(); verificarLembretes();
+  });
+});
+window.addEventListener('offline', verificarConexao);
+verificarConexao();
+
+
 
 function modo(c) {
   cadastro = c;
@@ -62,26 +80,42 @@ $('#form-login').onsubmit = async e => {
   const email = $('#email').value.trim();
   const senha = $('#senha').value;
   erro.textContent = '';
-
-  if (cadastro) {
-    const nome = $('#nome').value.trim();
-    const { data, error } = await db.auth.signUp({
-      email,
-      password: senha,
-      options: { data: { nome } }
-    });
-    if (error) return (erro.textContent = error.message);
-    aviso('Conta criada! Faça login.');
-    modo(false);
-  } else {
-    const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
-    if (error) return (erro.textContent = 'E-mail ou senha incorretos.');
-    iniciarSessao(data.session);
-  }
+  if (!navigator.onLine) { erro.textContent = mensagemConexao; return; }
+  if (!db) { erro.textContent = 'O aplicativo não conseguiu carregar a conexão. Verifique sua conexão e atualize a página.'; return; }
+  const botao = $('#entrar');
+  botao.disabled = true;
+  try {
+    if (cadastro) {
+      const nome = $('#nome').value.trim();
+      const { error } = await db.auth.signUp({
+        email, password: senha, options: { data: { nome } }
+      });
+      if (error) throw error;
+      aviso('Conta criada! Faça login.');
+      modo(false);
+    } else {
+      const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
+      if (error) throw error;
+      if (data?.session) await iniciarSessao(data.session);
+      else erro.textContent = 'Não foi possível iniciar a sessão. Tente novamente.';
+    }
+  } catch (error) {
+    console.error('Plant+ autenticação:', error);
+    const rede = !navigator.onLine || error?.name === 'AuthRetryableFetchError' ||
+      /fetch|network|internet|connection|failed to fetch|timeout/i.test(error?.message || '');
+    erro.textContent = rede ? mensagemConexao : cadastro
+      ? (error?.message || 'Não foi possível criar a conta.')
+      : 'Não foi possível entrar. Verifique seu e-mail e senha.';
+  } finally { botao.disabled = false; }
 };
 
 async function iniciarSessao(session) {
   if (!session) return;
+  if (!navigator.onLine) {
+    $('#erro-login').textContent = mensagemConexao;
+    verificarConexao();
+    return;
+  }
   usuarioId = session.user.id;
   usuario = session.user.user_metadata?.nome || session.user.email.split('@')[0];
   $('#gaveta-nome').textContent = usuario;
@@ -91,6 +125,7 @@ async function iniciarSessao(session) {
   
   await carregarPosts();
   await carregarMinhasPlantas();
+  atualizarBotaoNotificacoes();
 
   renderFiltros();
   renderFeed();
@@ -100,6 +135,10 @@ async function iniciarSessao(session) {
 }
 
 $('#sair').onclick = async () => {
+  if (!navigator.onLine) {
+    aviso('Verifique sua conexão para sair da conta com segurança.');
+    return;
+  }
   await db.auth.signOut();
   usuario = null;
   usuarioId = null;
@@ -142,7 +181,7 @@ function renderFiltros() {
 }
 
 async function carregarPosts() {
-  if (!db || !usuarioId) return;
+  if (!db || !usuarioId || !navigator.onLine) return;
   const { data, error } = await db.from('posts')
     .select('*')
     .eq('usuario_id', usuarioId)
@@ -156,7 +195,7 @@ function renderFeed() {
   const g = $('#grade');
   g.replaceChildren();
   const lista = posts.filter(p => (filtro === 'Tudo' || planta(p.planta_id)?.tipo === filtro) && `${p.planta || ''} ${p.texto || ''} ${p.autor || ''}`.toLowerCase().includes(q));
-  if (!lista.length) g.append(el('p', 'sub', 'Nenhuma foto encontrada.\n Adicione uma foto da sua planta!'));
+  if (!lista.length) g.append(el('p', 'sub', 'Nenhuma foto encontrada. Adicione uma foto da sua planta!'));
   lista.forEach(p => {
     const c = el('article', 'card');
     const m = el('button', 'midia');
@@ -225,6 +264,7 @@ function resetarEdicaoPost() {
 }
 $('#post-cancelar').onclick = () => { resetarEdicaoPost(); renderFeed(); ir('feed'); };
 $('#det-excluir').onclick = async () => {
+  if (!navigator.onLine) return aviso(mensagemConexao);
   if (!atual || !donoPost(atual) || !confirm('Excluir esta publicação definitivamente?')) return;
   const id = atual.id;
   const { data, error } = await db.from('posts').delete()
@@ -255,6 +295,7 @@ async function fotoParaBase64(f) {
 
 $('#form-post').onsubmit = async e => {
   e.preventDefault();
+  if (!navigator.onLine) return aviso(mensagemConexao);
   if (!db || !usuarioId) return aviso('Faça login para salvar fotos.');
   const pl = planta($('#post-planta').value);
   if (!pl) return aviso('Selecione uma planta válida.');
@@ -303,7 +344,7 @@ function erroJardim(operacao, error) {
 }
 
 async function carregarMinhasPlantas() {
-  if (!db || !usuarioId) return;
+  if (!db || !usuarioId || !navigator.onLine) return;
   try {
     const { data, error } = await db.from('meu_jardim')
       .select('*')
@@ -317,6 +358,7 @@ async function carregarMinhasPlantas() {
 }
 
 async function salvarMinhaPlanta(m) {
+  if (!navigator.onLine) { aviso(mensagemConexao); return null; }
   if (!db || !usuarioId || !m.id) {
     aviso('Faça login para atualizar o cultivo.');
     return null;
@@ -346,6 +388,7 @@ function renderPlantas() {
   const pend = minhas.filter(m => restam(m) <= 0);
   $('#banner').textContent = pend.length ? `Rega pendente: ${pend.length} planta(s).` : 'Nenhuma rega pendente hoje.';
   $('#banner').classList.toggle('alerta', pend.length > 0);
+  atualizarBotaoNotificacoes();
   document.querySelector('[data-ir=plantas]').dataset.n = pend.length || '';
   const lista = $('#lista-plantas');
   lista.replaceChildren();
@@ -382,6 +425,7 @@ function renderPlantas() {
     editar.onclick = () => abrirModalCultivo(m);
     const excluir = el('button', 'btn claro pequeno acao-excluir', 'Excluir');
     excluir.onclick = async () => {
+      if (!navigator.onLine) return aviso(mensagemConexao);
       if (!confirm('Excluir este cultivo definitivamente?')) return;
       excluir.disabled = true;
       const { data, error } = await db.from('meu_jardim')
@@ -416,6 +460,88 @@ $('#fab').onclick = () => abrirModalCultivo();
 $('#cancelar').onclick = fecharModal;
 modal.onclick = e => { if (e.target === modal) fecharModal(); };
 $('#hamb').onclick = () => { $('#gaveta').hidden = !$('#gaveta').hidden; };
+
+// Lembretes locais: duas janelas diárias (8h e 18h) com o app aberto.
+// Não são notificações push agendadas: navegadores podem suspender o PWA fechado.
+const HORARIOS_REGA = [8, 18];
+const chaveLembrete = sufixo => `plantplus:rega:${usuarioId}:${sufixo}`;
+const lembretesAtivos = () => {
+  if (!usuarioId) return false;
+  try { return localStorage.getItem(chaveLembrete('ativo')) === 'sim'; }
+  catch { return false; }
+};
+function atualizarBotaoNotificacoes() {
+  const botao = $('#alternar-notificacoes');
+  if (!botao) return;
+  const ativo = lembretesAtivos();
+  botao.textContent = ativo ? '🔔 Desativar notificações' : '🔕 Ativar notificações';
+  botao.setAttribute('aria-pressed', String(ativo));
+  $('#info-notificacoes').textContent = 'Lembretes às 8h e 18h, para regas pendentes, enquanto o Plant+ estiver aberto.';
+}
+async function exibirNotificacaoRega(qtd) {
+  const corpo = qtd === 1 ? 'Há 1 cultivo com rega pendente no Meu Jardim.'
+    : `Há ${qtd} cultivos com rega pendente no Meu Jardim.`;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) { aviso(corpo); return; }
+      await reg.showNotification('🌱 Plant+ • Hora de conferir a rega', {
+        body: corpo, icon: './icon-pplus-192-v3.png', badge: './icon-pplus-192-v3.png',
+        tag: 'plantplus-rega', renotify: true, data: { url: './' }
+      });
+    } else {
+      new Notification('🌱 Plant+ • Hora de conferir a rega', { body: corpo });
+    }
+  } catch (error) { console.warn('Notificação indisponível:', error); aviso(corpo); }
+}
+function verificarLembretes() {
+  if (!lembretesAtivos() || !usuarioId) return;
+  const pendentes = minhas.filter(m => restam(m) <= 0).length;
+  if (!pendentes) return;
+  const agora = new Date();
+  // A janela não recupera horários perdidos durante o período em que o app ficou fechado.
+  const horario = HORARIOS_REGA.find(h => agora.getHours() >= h && agora.getHours() < h + 2);
+  if (horario === undefined) return;
+  const marca = `${hoje()}:${horario}`;
+  let anterior;
+  try { anterior = localStorage.getItem(chaveLembrete('ultimo')); } catch { return; }
+  if (anterior === marca) return;
+  try { localStorage.setItem(chaveLembrete('ultimo'), marca); } catch { return; }
+  exibirNotificacaoRega(pendentes);
+}
+$('#alternar-notificacoes').onclick = async () => {
+  if (!usuarioId) return aviso('Entre na sua conta para configurar lembretes.');
+  if (lembretesAtivos()) {
+    try { localStorage.removeItem(chaveLembrete('ativo')); } catch {}
+    atualizarBotaoNotificacoes();
+    aviso('Lembretes desativados.');
+    return;
+  }
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    alert('Seu navegador não permite notificações do Plant+. Instale o PWA e confira as permissões do aparelho.');
+    return;
+  }
+  let permissao = Notification.permission;
+  if (permissao === 'default') {
+    try { permissao = await Notification.requestPermission(); }
+    catch (error) { console.warn('Permissão:', error); }
+  }
+  if (permissao !== 'granted') {
+    alert('As notificações não foram permitidas. Habilite-as nas configurações do navegador ou do aparelho.');
+    return;
+  }
+  try { localStorage.setItem(chaveLembrete('ativo'), 'sim'); }
+  catch { return aviso('Não foi possível salvar sua preferência de notificações.'); }
+  atualizarBotaoNotificacoes();
+  $('#gaveta').hidden = true;
+  aviso('Lembretes ativados para 8h e 18h (com o app aberto).');
+  verificarLembretes();
+};
+setInterval(verificarLembretes, 60 * 1000);
+window.addEventListener('focus', verificarLembretes);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) verificarLembretes(); });
+
 
 // Instalação do PWA: o navegador decide se pode exibir o convite nativo.
 let conviteInstalacao = null;
@@ -461,6 +587,7 @@ $('#instalar-app').onclick = async () => {
 
 $('#form-add').onsubmit = async e => {
   e.preventDefault();
+  if (!navigator.onLine) return aviso(mensagemConexao);
   if (!db || !usuarioId) return aviso('Faça login para salvar uma planta.');
   const plantaId = $('#add-planta').value;
   if (!planta(plantaId)) return aviso('Planta inválida.');
@@ -521,11 +648,20 @@ function renderGuia() {
 
 // Checa sessão ao carregar a página usando 'db'
 if (db) {
-  db.auth.getSession().then(({ data: { session } }) => {
-    if (session) iniciarSessao(session);
-  });
+  db.auth.getSession()
+    .then(({ data, error }) => {
+      if (error) throw error;
+      if (data?.session) iniciarSessao(data.session).catch(console.error);
+      else if (!navigator.onLine) $('#erro-login').textContent = mensagemConexao;
+    })
+    .catch(error => {
+      console.warn('Não foi possível recuperar a sessão:', error);
+      if (!navigator.onLine) $('#erro-login').textContent = mensagemConexao;
+    });
+} else {
+  $('#erro-login').textContent = mensagemConexao;
 }
-// PWA: apenas os arquivos estáticos são guardados no cache; dados pessoais continuam no Supabase.
+// PWA instalável, mas exige internet. Sem conexão, o Service Worker exibe somente um aviso.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Service Worker:', error));
