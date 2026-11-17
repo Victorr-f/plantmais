@@ -7,6 +7,7 @@
 <title>Plant+</title>
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#1b4d2e">
 </head>
 <body>
@@ -16,13 +17,14 @@
 </header>
 <aside id="gaveta" hidden>
   <p>Olá, <strong id="gaveta-nome"></strong></p>
-  <button id="sair" class="btn claro">Sair</button>
+  <button id="instalar-app" class="btn claro btn-instalar" type="button">📲 Instalar Plant+</button>
+  <button id="sair" class="btn btn-sair" type="button">Sair da conta</button>
 </aside>
 
 <main>
   <section id="login" class="tela ativa">
     <form id="form-login" class="painel">
-      <h1 class="logo"> Plant+</h1>
+      <h1 class="logo">🌿 Plant+</h1>
       <p class="sub">Bem-vindo à comunidade Plant+! Aprenda a cultivar sua horta em casa.</p>
       <label id="campo-nome" hidden>Nome<input id="nome" maxlength="40" autocomplete="name"></label>
       <label>E-mail<input id="email" type="email" required autocomplete="email"></label>
@@ -35,7 +37,7 @@
 
   <section id="feed" class="tela">
     <div class="topo">
-      <h2>Inicio <span aria-label="Privado"></span></h2>
+      <h2>Minhas Fotos <span aria-label="Privado">🔒</span></h2>
       <input id="busca" type="search" placeholder="Buscar minhas fotos" aria-label="Buscar plantas" maxlength="40">
     </div>
     <div id="filtros" class="filtros"></div>
@@ -49,8 +51,8 @@
       <h2 id="det-titulo"></h2>
       <p id="det-texto"></p>
       <div class="acoes">
-        <button id="det-editar" class="btn claro pequeno" hidden>Editar publicação</button>
-          <button id="det-excluir" class="btn claro pequeno" hidden>Excluir publicação</button>
+        <button id="det-editar" class="btn claro pequeno acao-editar" hidden>Editar publicação</button>
+          <button id="det-excluir" class="btn claro pequeno acao-excluir" hidden>Excluir publicação</button>
       </div>
       <div id="det-cuidado" class="caixa"></div>
     </article>
@@ -113,7 +115,7 @@
 </div>
 
 <nav id="menu" hidden>
-  <button data-ir="feed"><svg class="ico" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</button>
+  <button data-ir="feed"><svg class="ico" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Minhas Fotos</button>
   <button data-ir="plantas"><svg class="ico" viewBox="0 0 24 24"><path d="M12 21v-9M12 12c0-4-3-6-7-6 0 4 3 6 7 6zM12 14c0-3 2-5 6-5 0 3-2 5-6 5 z"/></svg>Cultivos</button>
   <button data-ir="postar"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 7l1.5-3h5L16 7"/></svg>Postar</button>
   <button data-ir="guia"><svg class="ico" viewBox="0 0 24 24"><path d="M4 5h6a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H4zM20 5h-6a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h6z"/></svg>Guia</button>

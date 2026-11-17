@@ -285,3 +285,13 @@ input[type=time] { width: auto; }
   .lista .cultivo { padding: 12px; align-items: start; }
   .cultivo .nome { font-size: 1.1rem; }
 }
+
+/* Ações e instalação do aplicativo */
+.btn.claro.acao-editar { color: #b17a00; border-color: #d5a000; }
+.btn.claro.acao-editar:hover { background: #fff3bf; }
+.btn.claro.acao-excluir { color: #c62828; border-color: #c62828; }
+.btn.claro.acao-excluir:hover { background: #ffebee; }
+.btn.btn-sair { color: #fff; background: #c62828; border-color: #c62828; }
+.btn.btn-sair:hover { background: #a51e1e; border-color: #a51e1e; }
+.btn.btn-instalar { color: var(--musgo); border-color: var(--folha); }
+.btn.btn-instalar:hover { background: var(--brota); }

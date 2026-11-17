@@ -22,7 +22,7 @@ function aviso(t) {
   aviso.t = setTimeout(() => { a.hidden = true; }, 3000);
 }
 
-const TITULOS = { feed: 'Plant+ | Inicio', detalhe: 'Plant+ | Foto', postar: 'Plant+ | Postar foto', plantas: 'Plant+ | Cultivos', guia: 'Plant+ | Guia da horta' };
+const TITULOS = { feed: 'Plant+ | Minhas Fotos', detalhe: 'Plant+ | Foto', postar: 'Plant+ | Postar foto', plantas: 'Plant+ | Cultivos', guia: 'Plant+ | Guia da horta' };
 
 function ir(nome) {
   document.querySelectorAll('.tela').forEach(t => t.classList.toggle('ativa', t.id === nome));
@@ -371,9 +371,9 @@ function renderPlantas() {
       if (atualizado) { Object.assign(m, atualizado); renderPlantas(); aviso('Rega registrada!'); }
       else ok.disabled = false;
     };
-    const editar = el('button', 'btn claro pequeno', 'Editar');
+    const editar = el('button', 'btn claro pequeno acao-editar', 'Editar');
     editar.onclick = () => abrirModalCultivo(m);
-    const excluir = el('button', 'btn claro pequeno', 'Excluir');
+    const excluir = el('button', 'btn claro pequeno acao-excluir', 'Excluir');
     excluir.onclick = async () => {
       if (!confirm('Excluir este cultivo definitivamente?')) return;
       excluir.disabled = true;
@@ -408,6 +408,48 @@ $('#fab').onclick = () => abrirModalCultivo();
 $('#cancelar').onclick = fecharModal;
 modal.onclick = e => { if (e.target === modal) fecharModal(); };
 $('#hamb').onclick = () => { $('#gaveta').hidden = !$('#gaveta').hidden; };
+
+// Instalação do PWA: o navegador decide se pode exibir o convite nativo.
+let conviteInstalacao = null;
+window.addEventListener('beforeinstallprompt', evento => {
+  evento.preventDefault();
+  conviteInstalacao = evento;
+});
+window.addEventListener('appinstalled', () => {
+  conviteInstalacao = null;
+  aviso('Plant+ instalado com sucesso!');
+});
+const instaladoComoApp = () =>
+  window.matchMedia('(display-mode: standalone)').matches ||
+  window.navigator.standalone === true;
+
+$('#instalar-app').onclick = async () => {
+  $('#gaveta').hidden = true;
+  if (instaladoComoApp()) {
+    alert('O Plant+ já está aberto como aplicativo neste aparelho.');
+    return;
+  }
+  if (conviteInstalacao) {
+    const convite = conviteInstalacao;
+    conviteInstalacao = null;
+    try {
+      await convite.prompt();
+      await convite.userChoice;
+    } catch (erro) {
+      console.warn('Não foi possível exibir a instalação:', erro);
+      alert('Para adicionar o Plant+ à tela inicial, abra o menu do navegador e escolha Instalar aplicativo ou Adicionar à tela inicial.');
+    }
+    return;
+  }
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (ios) {
+    alert('Para colocar o Plant+ na tela inicial: abra o menu Compartilhar do navegador, toque em Adicionar à Tela de Início e confirme em Adicionar. Se essa opção não aparecer, tente abrir o site pelo Safari.');
+  } else {
+    alert('Para instalar ou criar um atalho do Plant+, abra o menu do navegador (geralmente ⋮) e escolha Instalar aplicativo ou Adicionar à tela inicial. Se não aparecer, o navegador pode não oferecer essa opção neste momento.');
+  }
+};
+
 
 $('#form-add').onsubmit = async e => {
   e.preventDefault();
@@ -469,11 +511,13 @@ function renderGuia() {
   $('#dicas').replaceChildren(...DICAS.map(d => el('li', null, d)));
 }
 
+// Checa sessão ao carregar a página usando 'db'
 if (db) {
   db.auth.getSession().then(({ data: { session } }) => {
     if (session) iniciarSessao(session);
   });
 }
+// PWA: apenas os arquivos estáticos são guardados no cache; dados pessoais continuam no Supabase.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Service Worker:', error));
