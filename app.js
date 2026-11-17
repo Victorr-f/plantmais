@@ -22,7 +22,7 @@ function aviso(t) {
   aviso.t = setTimeout(() => { a.hidden = true; }, 3000);
 }
 
-const TITULOS = { feed: 'Plant+ | Inicio', detalhe: 'Plant+ | Foto', postar: 'Plant+ | Postar foto', plantas: 'Plant+ | Cultivos', guia: 'Plant+ | Guia da horta' };
+const TITULOS = { feed: 'Plant+ | Início', detalhe: 'Plant+ | Foto', postar: 'Plant+ | Postar foto', plantas: 'Plant+ | Cultivos', guia: 'Plant+ | Guia da horta' };
 
 function ir(nome) {
   document.querySelectorAll('.tela').forEach(t => t.classList.toggle('ativa', t.id === nome));
@@ -193,8 +193,13 @@ function renderDetalhe() {
   cuidado.replaceChildren();
   if (pl) {
     cuidado.append(el('strong', null, 'Como cuidar'));
-    [`Luz: ${pl.luz}`, `Regar a cada ${pl.rega} dias`, `Onde plantar: ${pl.vaso}`, `Estações: ${pl.est.join(', ')}`, pl.dica]
+    [`Luz: ${pl.luz}`, `Regar a cada ${pl.rega} dias (estimativa)`, `Onde plantar: ${pl.vaso}`, `Estações: ${pl.est.join(', ')}`, pl.dica]
       .forEach(t => cuidado.append(el('p', null, t)));
+    if (pl.epocaPlantio) {
+      cuidado.append(el('strong', null, 'Dados do Guia de Plantio e Espaçamento de Hortaliças'));
+      [`Época de plantio: ${pl.epocaPlantio}`, `Tipo de plantio: ${pl.tipoPlantio}`, `Produção de mudas: ${pl.producaoMudasDias ? pl.producaoMudasDias + ' dias' : 'não indicada'}`, `Ciclo da cultura: ${pl.cicloDias} dias`, `Espaçamento convencional: ${pl.espacamentoConvencional} m`, `Espaçamento HPE: ${pl.espacamentoHPE} m`]
+        .forEach(t => cuidado.append(el('p', null, t)));
+    }
   }
 }
 
@@ -504,7 +509,13 @@ function renderGuia() {
   PLANTAS.filter(p => p.est.includes(estacao)).forEach(p => {
     const li = el('li', 'item');
     const t = el('div');
-    t.append(el('strong', null, `${p.emoji} ${p.nome}`), el('small', null, `${p.luz} · regar a cada ${p.rega} dias`), el('small', null, p.dica));
+    t.append(el('strong', null, `${p.emoji} ${p.nome}`), el('small', null, `${p.luz} · regar a cada ${p.rega} dias (estimativa)`), el('small', null, p.dica));
+    if (p.epocaPlantio) {
+      const detalhes = el('div', 'dados-cultivo');
+      [`Plantio: ${p.epocaPlantio} · ${p.tipoPlantio}`, `Ciclo: ${p.cicloDias} dias`, `Produção de mudas: ${p.producaoMudasDias ? p.producaoMudasDias + ' dias' : 'não indicada'}`, `Espaçamento convencional: ${p.espacamentoConvencional} m`, `Espaçamento HPE: ${p.espacamentoHPE} m`]
+        .forEach(linha => detalhes.append(el('small', null, linha)));
+      t.append(detalhes);
+    }
     li.append(t);
     l.append(li);
   });

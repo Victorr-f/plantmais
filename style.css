@@ -295,3 +295,7 @@ input[type=time] { width: auto; }
 .btn.btn-sair:hover { background: #a51e1e; border-color: #a51e1e; }
 .btn.btn-instalar { color: var(--musgo); border-color: var(--folha); }
 .btn.btn-instalar:hover { background: var(--brota); }
+
+/* Informações de plantio do guia fornecido */
+.dados-cultivo { margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: var(--brota); display: grid; gap: 3px; }
+.dados-cultivo small { color: var(--musgo); }
