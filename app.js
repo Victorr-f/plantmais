@@ -476,7 +476,7 @@ function atualizarBotaoNotificacoes() {
   const ativo = lembretesAtivos();
   botao.textContent = ativo ? '🔕 Desativar notificações' : '🔔 Ativar notificações';
   botao.setAttribute('aria-pressed', String(ativo));
-  $('#info-notificacoes').textContent = 'Lembretes às 8h e 18h, para regas pendentes, enquanto o Plant+ estiver aberto.';
+  $('#info-notificacoes').textContent = 'Lembretes às 8h e 18h, enquanto o Plant+ estiver aberto.';
 }
 async function exibirNotificacaoRega(qtd) {
   const corpo = qtd === 1 ? 'Há 1 cultivo com rega pendente no Meu Jardim.'
