@@ -195,11 +195,7 @@ function renderDetalhe() {
     cuidado.append(el('strong', null, 'Como cuidar'));
     [`Luz: ${pl.luz}`, `Regar a cada ${pl.rega} dias (estimativa)`, `Onde plantar: ${pl.vaso}`, `Estações: ${pl.est.join(', ')}`, pl.dica]
       .forEach(t => cuidado.append(el('p', null, t)));
-    if (pl.epocaPlantio) {
-      cuidado.append(el('strong', null, 'Dados do Guia de Plantio e Espaçamento de Hortaliças'));
-      [`Época de plantio: ${pl.epocaPlantio}`, `Tipo de plantio: ${pl.tipoPlantio}`, `Produção de mudas: ${pl.producaoMudasDias ? pl.producaoMudasDias + ' dias' : 'não indicada'}`, `Ciclo da cultura: ${pl.cicloDias} dias`, `Espaçamento convencional: ${pl.espacamentoConvencional} m`, `Espaçamento HPE: ${pl.espacamentoHPE} m`]
-        .forEach(t => cuidado.append(el('p', null, t)));
-    }
+
   }
 }
 
@@ -358,7 +354,13 @@ function renderPlantas() {
     const pl = planta(m.planta_sistema_id);
     const li = el('li', 'cultivo');
     const t = el('div', 'dados');
-    t.append(el('strong', 'nome', `${pl?.emoji || '🌱'} ${m.apelido || pl?.nome || m.planta_sistema_id}`));
+    const nomeOriginal = pl?.nome || m.planta_sistema_id;
+    const apelido = (m.apelido || '').trim();
+    const temApelido = apelido.length > 0 && apelido !== nomeOriginal;
+    t.append(el('strong', 'nome', `${pl?.emoji || '🌱'} ${temApelido ? apelido : nomeOriginal}`));
+    if (temApelido) {
+      t.append(el('small', 'nome-original', nomeOriginal));
+    }
     if (m.data_plantio) {
       const n = dias(hoje(), m.data_plantio);
       t.append(el('span', null, 'Data de plantio:'), el('b', null, m.data_plantio.split('-').reverse().join('/')),
@@ -403,7 +405,8 @@ function abrirModalCultivo(m = null) {
   $('#add-salvar').textContent = m ? 'Salvar alterações' : 'Adicionar';
   $('#add-planta').value = m?.planta_sistema_id || PLANTAS[0].id;
   $('#add-data').value = m?.data_plantio || hoje();
-  $('#add-apelido').value = m?.apelido || '';
+  const nomeDaEspecie = planta(m?.planta_sistema_id)?.nome;
+  $('#add-apelido').value = m?.apelido && m.apelido !== nomeDaEspecie ? m.apelido : '';
   const estagio = m?.estagio || 'semente';
   const radio = [...document.querySelectorAll('[name=estagio]')].find(el => el.value === estagio);
   if (radio) radio.checked = true;
@@ -463,7 +466,7 @@ $('#form-add').onsubmit = async e => {
   if (!planta(plantaId)) return aviso('Planta inválida.');
   const campos = {
     planta_sistema_id: plantaId,
-    apelido: $('#add-apelido').value.trim().slice(0, 60) || planta(plantaId).nome,
+    apelido: $('#add-apelido').value.trim().slice(0, 60) || null,
     data_plantio: $('#add-data').value,
     estagio: document.querySelector('[name=estagio]:checked').value
   };
@@ -510,12 +513,6 @@ function renderGuia() {
     const li = el('li', 'item');
     const t = el('div');
     t.append(el('strong', null, `${p.emoji} ${p.nome}`), el('small', null, `${p.luz} · regar a cada ${p.rega} dias (estimativa)`), el('small', null, p.dica));
-    if (p.epocaPlantio) {
-      const detalhes = el('div', 'dados-cultivo');
-      [`Plantio: ${p.epocaPlantio} · ${p.tipoPlantio}`, `Ciclo: ${p.cicloDias} dias`, `Produção de mudas: ${p.producaoMudasDias ? p.producaoMudasDias + ' dias' : 'não indicada'}`, `Espaçamento convencional: ${p.espacamentoConvencional} m`, `Espaçamento HPE: ${p.espacamentoHPE} m`]
-        .forEach(linha => detalhes.append(el('small', null, linha)));
-      t.append(detalhes);
-    }
     li.append(t);
     l.append(li);
   });

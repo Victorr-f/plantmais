@@ -299,3 +299,6 @@ input[type=time] { width: auto; }
 /* Informações de plantio do guia fornecido */
 .dados-cultivo { margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: var(--brota); display: grid; gap: 3px; }
 .dados-cultivo small { color: var(--musgo); }
+
+/* Nome original abaixo do apelido no Meu Jardim */
+.cultivo .nome-original { color: #57735e; font-size: 0.85rem; line-height: 1.35; }
