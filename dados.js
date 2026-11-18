@@ -23,6 +23,10 @@ const PLANTAS = [
   { id: 'pimentao', nome: 'Pimentão', emoji: '🫑', tipo: 'Hortaliças', luz: 'Sol pleno, 6 h ou mais', rega: 2, vaso: 'Vaso de 20 L ou maior, com tutor', est: ['primavera', 'verão'], dica: 'Mantenha umidade constante sem encharcar e proteja a planta de ventos fortes.', epocaPlantio: "Ago–Fev", tipoPlantio: "Mudas", cicloDias: "100–110", espacamentoConvencional: "1,00 × 0,50", espacamentoHPE: "0,70 × 0,35", producaoMudasDias: "30" }
 ];
 
+PLANTAS.sort((a, b) =>
+  a.nome.localeCompare(b.nome, 'pt-BR')
+);
+
 const DICAS = [
   'Use vasos com furo de drenagem e uma camada de argila expandida no fundo.',
   'Teste a rega: enfie o dedo 2 cm na terra. Se estiver seca, regue.',
